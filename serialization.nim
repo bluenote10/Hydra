@@ -14,23 +14,6 @@ proc serialize*(s: Stream, x: string) =
   s.write(x)
 
 
-#[
-proc serialize*[T](s: Stream, x: openarray[T]) =
-  s.write(x.len)
-  # TODO we need to differentiate between native / fixed-width types
-  when x is seq:
-    var tmp: seq[T]
-    shallowCopy(tmp, x)
-    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
-  else:
-    var tmp: array[1, T]
-    shallowCopy(tmp, cast[array[1, T]](x))
-    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
-  # General solution would require
-  # for i in 0 ..< x.len:
-  #   s.serialize(x[i])
-]#
-
 proc serialize*[T](s: Stream, x: seq[T]) =
   s.write(x.len)
   # TODO we need to differentiate between native / fixed-width types
@@ -50,6 +33,25 @@ proc serialize*[N, T](s: Stream, x: array[N, T]) =
   # General solution would require
   # for i in 0 ..< x.len:
   #   s.serialize(x[i])
+
+#[
+# Attempt to merge seq+array versions into openarray seems to be tricky here
+#
+proc serialize*[T](s: Stream, x: openarray[T]) =
+  s.write(x.len)
+  # TODO we need to differentiate between native / fixed-width types
+  when x is seq:
+    var tmp: seq[T]
+    shallowCopy(tmp, x)
+    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
+  else:
+    var tmp: array[1, T]
+    shallowCopy(tmp, cast[array[1, T]](x))
+    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
+  # General solution would require
+  # for i in 0 ..< x.len:
+  #   s.serialize(x[i])
+]#
 
 
 proc newEIO(msg: string): ref IOError =
@@ -103,15 +105,19 @@ proc deserialize*[N, U](s: Stream, T: typedesc[array[N, U]]): array[N, U] =
     raise newEIO("cannot read from stream")
 
 
+# -----------------------------------------------------------------------------
+# Serialization companion proc generation
+# -----------------------------------------------------------------------------
+
 proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
   # echo n.treeRepr
   let origProcName = getProcName(n)
 
   let formalParams = n[3]
-  let inputNodes = formalParams.getChildren[1..<formalParams.len]
+  let args = formalParams.getChildren[1..<formalParams.len]
   # let returnNode = formalParams[0]
   # echo returnNode.treeRepr
-  # echo inputNodes.repr
+  # echo args.repr
 
   var argStatements = newStmtList()
   var origProcCall = newCall(ident(origProcName))
@@ -123,7 +129,7 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
     bind deserialize
     let argName = inStream.deserialize(argType)
 
-  for i, arg in inputNodes.pairs:
+  for i, arg in args.pairs:
     let argName = ident("arg" & $i)
     let argType = arg[1]
     argStatements.add(getAst(defineArg(argName, argType)))
@@ -153,6 +159,9 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
   # echo result.treeRepr
 
 
+# -----------------------------------------------------------------------------
+# Quick checks
+# -----------------------------------------------------------------------------
 
 when isMainModule:
   var s = newStringStream()
