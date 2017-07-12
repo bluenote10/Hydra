@@ -1,4 +1,4 @@
-import macros
+import macros, macro_utils
 import typeinfo
 import streams
 import typeinfo
@@ -61,7 +61,7 @@ proc read[T](s: Stream, result: var T) =
   if readData(s, addr(result), sizeof(T)) != sizeof(T):
     raise newEIO("cannot read from stream")
 
-
+#[
 proc deser*[T: SomeInteger|SomeReal](s: Stream): T =
   read[T](s, result)
 
@@ -70,7 +70,7 @@ proc deser*[T: string](s: Stream): string =
   read[int](s, len)
   result = s.readStr(len)
 
-#[
+
 proc deser*[T](s: Stream): seq[T] =
   var len: int
   read[int](s, len)
@@ -103,51 +103,103 @@ proc deserialize*[N, U](s: Stream, T: typedesc[array[N, U]]): array[N, U] =
     raise newEIO("cannot read from stream")
 
 
-var s = newStringStream()
+proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
+  # echo n.treeRepr
+  let origProcName = getProcName(n)
 
-s.serialize(42)
-s.serialize(1.0)
-s.serialize("hey")
-s.serialize(@[1,2,3])
-s.serialize([1,2,3])
+  let formalParams = n[3]
+  let inputNodes = formalParams.getChildren[1..<formalParams.len]
+  # let returnNode = formalParams[0]
+  # echo returnNode.treeRepr
+  # echo inputNodes.repr
 
-echo s.data
+  var argStatements = newStmtList()
+  var origProcCall = newCall(ident(origProcName))
 
-for c in s.data:
-  echo ord(c)
+  template defineArg(argName, argType) {.dirty.} =
+    # Note: it's important to bind deserialize here where it is actually
+    # used and not in the context of the other template (where `bind`
+    # would not work for deserialize). Rule of thumb: bind in usage scope
+    bind deserialize
+    let argName = inStream.deserialize(argType)
 
-echo "------------------"
-s.setPosition(0)
-#echo deserialize[int](s)
-#echo deserialize[float](s)
-#echo deserialize[string](s)
-#echo deserialize[seq[int]](s)
+  for i, arg in inputNodes.pairs:
+    let argName = ident("arg" & $i)
+    let argType = arg[1]
+    argStatements.add(getAst(defineArg(argName, argType)))
+    origProcCall.add(argName)
 
-echo s.deserialize(int)
-echo s.deserialize(float)
-echo s.deserialize(string)
-echo s.deserialize(seq[int])
-echo @(s.deserialize(array[3, int])) # lack of $ for array
+  # echo argStatements.repr
 
-import times
-template runTimed(body: untyped) =
-  let t1 = epochTime()
-  body
-  let t2 = epochTime()
-  echo t2 - t1
+  template buildProc(procName, argStatements, origProc, origProcCall) {.dirty.} =
+    proc procName(s: string): string =
+      bind procName, newStringStream, serialize
+      var inStream = newStringStream(s)
+      argStatements
+      let origRes = origProcCall
+      var outStream = newStringStream()
+      outStream.serialize(origRes)
+      result = outStream.data
+
+  result = getAst(buildProc(
+    ident($origProcName & "Serialized"),
+    argStatements,
+    ident($origProcName),
+    origProcCall
+  ))
+  # getAst gives a StmtList with the first statement being the proc def
+  result = result[0]
+  # echo result.repr
+  # echo result.treeRepr
 
 
-block:
-  echo "Serializing"
-  runTimed:
-    let huge = newSeq[int](8_000_000)
-    var fs = newFileStream("/media/GamesII/nim_serialization_test.dat", fmWrite)
-    fs.serialize(huge)
-    fs.close()
 
-block:
-  echo "Deserializing"
-  runTimed:
-    var fs = newFileStream("/media/GamesII/nim_serialization_test.dat", fmRead)
-    let huge = fs.deserialize(seq[int])
-    echo huge.len
+when isMainModule:
+  var s = newStringStream()
+
+  s.serialize(42)
+  s.serialize(1.0)
+  s.serialize("hey")
+  s.serialize(@[1,2,3])
+  s.serialize([1,2,3])
+
+  echo s.data
+
+  for c in s.data:
+    echo ord(c)
+
+  echo "------------------"
+  s.setPosition(0)
+  #echo deserialize[int](s)
+  #echo deserialize[float](s)
+  #echo deserialize[string](s)
+  #echo deserialize[seq[int]](s)
+
+  echo s.deserialize(int)
+  echo s.deserialize(float)
+  echo s.deserialize(string)
+  echo s.deserialize(seq[int])
+  echo @(s.deserialize(array[3, int])) # lack of $ for array
+
+  import times
+  template runTimed(body: untyped) =
+    let t1 = epochTime()
+    body
+    let t2 = epochTime()
+    echo t2 - t1
+
+
+  block:
+    echo "Serializing"
+    runTimed:
+      let huge = newSeq[int](8_000_000)
+      var fs = newFileStream("/media/GamesII/nim_serialization_test.dat", fmWrite)
+      fs.serialize(huge)
+      fs.close()
+
+  block:
+    echo "Deserializing"
+    runTimed:
+      var fs = newFileStream("/media/GamesII/nim_serialization_test.dat", fmRead)
+      let huge = fs.deserialize(seq[int])
+      echo huge.len

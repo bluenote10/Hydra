@@ -1,28 +1,7 @@
-import macros
+import macros, macro_utils
 import future
 import tables
-
-
-proc getProcName(n: NimNode): NimNode {.compileTime.} =
-  #[
-    For public procs the node looks like
-
-        ProcDef
-          Postfix
-            Ident !"*"
-            Ident !"square"
-
-    For private it is:
-
-        ProcDef
-          Ident !"square"
-
-  ]#
-  case n[0].kind
-  of nnkPostFix:
-    result = n[0][1]
-  else:
-    result = n[0]
+import serialization
 
 
 type
@@ -35,20 +14,28 @@ var procId = 0
 macro remote*(n: untyped): untyped =
   expectKind n, nnkProcDef
 
-  echo n.treeRepr
+  # echo n.treeRepr
   let procName = getProcName(n)
 
-  # This template will add the procs to whatever runtime variable you want,
-  # so you can put a table inside here as well :)
-  template addRegProc(procDef, procName, procSym) =
+  let serializedProcDef = buildSerializedProc(n)
+  let serializedProcName = getProcName(serializedProcDef)
+
+  # Template to add procs to registry
+  template addRegProc(procDef, serializedProcDef, serializedProcName, serializedProcSym) =
     procDef
-    bind `procSym`
-    echo "Registering proc ", procName, " as ID ", procId, " [addr: ", cast[int](procSym), "]"
-    registeredProcs[procId] = procSym
-    procIdLookup[cast[pointer](procSym)] = procId
+    serializedProcDef
+    bind `serializedProcSym`
+    echo "Registering proc ", serializedProcName, " as ID ", procId, " [addr: ", cast[int](serializedProcSym), "]"
+    registeredProcs[procId] = serializedProcSym
+    procIdLookup[cast[pointer](serializedProcSym)] = procId
     procId += 1
 
-  result = getAst(addRegProc(n, $procName, ident(procName)))
+  result = getAst(addRegProc(
+    n,
+    serializedProcDef,
+    $serializedProcName,
+    ident(serializedProcName)
+  ))
   echo result.repr
 
   #result = n
@@ -68,9 +55,8 @@ template remote*(n) =
   n
 ]#
 
-proc square*(x: string): string {.remote.} = "squared"
-
-proc cubic(x: string): string {.remote.} = "cubed"
+# proc square*(x: float, y: float): int {.remote.} = 1
+# proc cubic(x: string): string {.remote.} = "cubed"
 
 
 proc genericCall*(id: int, x: string): string =
