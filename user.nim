@@ -1,11 +1,13 @@
 import remote as remote_module
+import serialization
 
-proc mySquare(x: string): string {.remote.} = "userSquared"
+proc square(x: int): int {.remote.} = x*x
+proc myCubic(x: float): float {.remote.} = x*x*x
 
-proc myCubic(x: string): string {.remote.} = "userCubic"
+# proc nonRemoteProc() = discard
 
-echo genericCall(2, "")
-echo genericCall(3, "")
+proc main() =
+  echo genericCall(square, store(4)).restore(int)
+  echo genericCall(myCubic, store(2.0)).restore(float)
 
-echo genericCall(mySquare, "")
-echo genericCall(myCubic, "")
+main()

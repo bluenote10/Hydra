@@ -11,34 +11,39 @@ var registeredProcs = newTable[int, SerializedProc]()
 var procIdLookup = newTable[pointer, int]()
 var procId = 0
 
-macro remote*(n: untyped): untyped =
-  expectKind n, nnkProcDef
+macro remote*(procDef: untyped): untyped =
+  expectKind procDef, nnkProcDef
 
   # echo n.treeRepr
-  let procName = getProcName(n)
+  let origName = $getProcName(procDef)
+  let origIdent = ident(origName)
 
-  let serializedProcDef = buildSerializedProc(n)
-  let serializedProcName = getProcName(serializedProcDef)
+  let sProcDef = buildSerializedProc(procDef)
+  let sProcName = $getProcName(sProcDef)
+  let sProcIdent = ident(sProcName)
 
   # Template to add procs to registry
-  template addRegProc(procDef, serializedProcDef, serializedProcName, serializedProcSym) =
+  template addRegProc(procDef, sProcDef, origName, origIdent, sProcIdent) =
     procDef
-    serializedProcDef
-    bind `serializedProcSym`
-    echo "Registering proc ", serializedProcName, " as ID ", procId, " [addr: ", cast[int](serializedProcSym), "]"
-    registeredProcs[procId] = serializedProcSym
-    procIdLookup[cast[pointer](serializedProcSym)] = procId
+    sProcDef
+    bind `sProcIdent`
+    # The lookup memory addr must be the one of orig, because that's what the user will pass in
+    echo "Registering proc ", origName, " as ID ", procId, " [addr: ", cast[int](origIdent), "]"
+    # The registered proc on the other hand must be the serialized one
+    registeredProcs[procId] = sProcIdent
+    procIdLookup[cast[pointer](origIdent)] = procId
     procId += 1
 
   result = getAst(addRegProc(
-    n,
-    serializedProcDef,
-    $serializedProcName,
-    ident(serializedProcName)
+    procDef,
+    sProcDef,
+    origName,
+    origIdent,
+    sProcIdent,
   ))
   echo result.repr
+  # echo result.treeRepr
 
-  #result = n
 
 #[
 macro checkNode(n: untyped): untyped =
@@ -59,15 +64,19 @@ template remote*(n) =
 # proc cubic(x: string): string {.remote.} = "cubed"
 
 
-proc genericCall*(id: int, x: string): string =
+proc genericCall(id: int, x: string): string =
   echo "looking up id ", id
   let f = registeredProcs[id]
   result = f(x)
 
 proc genericCall*(f: proc, x: string): string =
   echo "looking up func ", cast[int](f)
-  let id = procIdLookup[cast[pointer](f)]
-  result = genericCall(id, x)
+  let p = cast[pointer](f)
+  if procIdLookup.hasKey(p):
+    let id = procIdLookup[p]
+    result = genericCall(id, x)
+  else:
+    raise newException(ValueError, "Can't find passed in proc in remote proc list.")
 
-echo genericCall(0, "")
-echo genericCall(1, "")
+# echo genericCall(0, "")
+# echo genericCall(1, "")

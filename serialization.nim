@@ -104,6 +104,19 @@ proc deserialize*[N, U](s: Stream, T: typedesc[array[N, U]]): array[N, U] =
   if readData(s, addr(result[0]), sizeof(U) * len) != sizeof(U) * len:
     raise newEIO("cannot read from stream")
 
+# -----------------------------------------------------------------------------
+# High level API (string)
+# -----------------------------------------------------------------------------
+
+proc store*[T](x: T): string =
+  let stream = newStringStream()
+  stream.serialize(x)
+  result = stream.data
+
+proc restore*(s: string, T: typedesc): T =
+  let stream = newStringStream(s)
+  result = stream.deserialize(T)
+
 
 # -----------------------------------------------------------------------------
 # Serialization companion proc generation
