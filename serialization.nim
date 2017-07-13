@@ -92,7 +92,6 @@ proc deserialize*(s: Stream, T: typedesc[string]): string =
 proc deserialize*[U](s: Stream, T: typedesc[seq[U]]): seq[U] =
   var len: int
   read[int](s, len)
-  echo len
   result = newSeq[U](len)
   if readData(s, addr(result[0]), sizeof(U) * len) != sizeof(U) * len:
     raise newEIO("cannot read from stream")
@@ -177,31 +176,6 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
 # -----------------------------------------------------------------------------
 
 when isMainModule:
-  var s = newStringStream()
-
-  s.serialize(42)
-  s.serialize(1.0)
-  s.serialize("hey")
-  s.serialize(@[1,2,3])
-  s.serialize([1,2,3])
-
-  echo s.data
-
-  for c in s.data:
-    echo ord(c)
-
-  echo "------------------"
-  s.setPosition(0)
-  #echo deserialize[int](s)
-  #echo deserialize[float](s)
-  #echo deserialize[string](s)
-  #echo deserialize[seq[int]](s)
-
-  echo s.deserialize(int)
-  echo s.deserialize(float)
-  echo s.deserialize(string)
-  echo s.deserialize(seq[int])
-  echo @(s.deserialize(array[3, int])) # lack of $ for array
 
   import times
   template runTimed(body: untyped) =
@@ -210,6 +184,32 @@ when isMainModule:
     let t2 = epochTime()
     echo t2 - t1
 
+  block:
+    var s = newStringStream()
+
+    s.serialize(42)
+    s.serialize(1.0)
+    s.serialize("hey")
+    s.serialize(@[1,2,3])
+    s.serialize([1,2,3])
+
+    echo s.data
+
+    for c in s.data:
+      echo ord(c)
+
+    echo "------------------"
+    s.setPosition(0)
+    #echo deserialize[int](s)
+    #echo deserialize[float](s)
+    #echo deserialize[string](s)
+    #echo deserialize[seq[int]](s)
+
+    echo s.deserialize(int)
+    echo s.deserialize(float)
+    echo s.deserialize(string)
+    echo s.deserialize(seq[int])
+    echo @(s.deserialize(array[3, int])) # lack of $ for array
 
   block:
     echo "Serializing"
@@ -224,4 +224,15 @@ when isMainModule:
     runTimed:
       var fs = newFileStream("/media/GamesII/nim_serialization_test.dat", fmRead)
       let huge = fs.deserialize(seq[int])
-      echo huge.len
+      assert huge.len == 8_000_000
+
+  block:
+    echo "Store/Restore"
+    let N = 8_000_000
+    let huge = newSeq[int](N)
+    runTimed:
+      runTimed:
+        let stored = store(huge)
+      runTimed:
+        let restored = stored.restore(seq[int])
+    assert restored.len == N
