@@ -1,6 +1,7 @@
 import asyncnet, asyncdispatch
 import marshal
 import remote
+import net_utils
 
 proc globalSquare*(x: float): float {.remote.} = x * x
 
@@ -23,18 +24,6 @@ proc squareWrapped(msg: string): string =
   let x = to[int](msg)
   let y = x * x
   result = $$y
-
-
-proc sendMsg*(socket: AsyncSocket, msg: string) {.async.} =
-  var msgSize = msg.len.int
-  await socket.send(msgSize.addr, sizeOf(int))
-  await socket.send(msg)
-
-proc sendMsg*[T](socket: AsyncSocket, x: T) {.async.} =
-  var msg = $$x
-  var msgSize = msg.len.int
-  await socket.send(msgSize.addr, sizeOf(int))
-  await socket.send(msg)
 
 
 proc main() {.async.} =

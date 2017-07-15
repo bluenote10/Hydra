@@ -1,51 +1,37 @@
 import asyncnet, asyncdispatch
 import marshal
 import future
+import net_utils
 
-type fptr = (proc(x: float): float)
 
-import driver
-
-proc processClient(client: AsyncSocket) {.async.} =
+proc handleDriver(driver: AsyncSocket, master: AsyncSocket) {.async.} =
 
   while true:
 
-    var msgSize = 0
-
-    let numRead = await client.recvInto(msgSize.addr, sizeOf(int))
-    if numRead != sizeOf(int):
-      break
-
-    echo "trying to receive message of size ", msgSize
-    let msg = await client.recv(msgSize)
-
-    echo "received: ", msg
-
-    var data = to[(pointer, int)](msg)
-    echo "data: ", data
-
-    var p = data[0]
-    echo cast[int](p)
-    #var f = cast[globalSquare](p)
-    let arg = data[1]
-    #echo f, arg
-
-    if len(msg) == 0:
-      break
+    let msg = await driver.receiveMsg(string)
 
 
-proc serve() {.async.} =
+proc listen() {.async.} =
   var server = newAsyncSocket()
   server.setSockOpt(OptReuseAddr, true)
-  server.bindAddr(Port(12345))
+  server.bindAddr(Port(12346))
   server.listen()
 
+  # connect to master
   while true:
-    let client = await server.accept()
-    asyncCheck processClient(client)
+    echo "Trying to connect to master"
+    var master = newAsyncSocket()
+    echo "is closed after init: ", master.isClosed()
+    await master.connect("localhost", Port(12345))
+    await master.sendMsg("worker")
+
+    while true:
+      echo "Waiting for driver connection"
+      let client = await server.accept()
+      await handleDriver(client, master)
 
 
 proc runWorker*() =
-  echo "running worker"
-  asyncCheck serve()
+  echo "Running worker"
+  asyncCheck listen()
   runForever()

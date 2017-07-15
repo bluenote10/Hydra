@@ -1,5 +1,6 @@
 import os
 
+import master
 import worker
 import driver
 
@@ -10,6 +11,9 @@ proc runMain() =
   if args.len != 1:
     echo "Error: wrong number of arguments"
     quit 1
+
+  elif args[0] == "master":
+    runMaster()
 
   elif args[0] == "worker":
     runWorker()
