@@ -5,7 +5,7 @@ import worker
 import driver
 
 
-proc runMain() =
+proc launcher*(clientApp: ClientApp) =
   let args = commandLineParams()
 
   if args.len != 1:
@@ -19,10 +19,8 @@ proc runMain() =
     runWorker()
 
   elif args[0] == "driver":
-    runDriver()
+    runDriver(clientApp)
 
   else:
     echo "Error: Unknown mode '", args[0], "'"
 
-
-runMain()

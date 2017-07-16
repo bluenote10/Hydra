@@ -1,43 +1,37 @@
+import future
 import asyncnet, asyncdispatch
-import marshal
 import remote
 import net_utils
-
-proc globalSquare*(x: float): float {.remote.} = x * x
-
-proc checkAddress() =
-
-  proc square(x: float): float {.closure.} = x * x
-  let p = square.rawProc
-  echo cast[int](p)
-
-  #var f = square
-  #echo cast[int](f)
-
-  let pGlobal = globalSquare
-  echo cast[int](pGlobal)
-
-#checkAddress()
+import messages
 
 
-proc squareWrapped(msg: string): string =
-  let x = to[int](msg)
-  let y = x * x
-  result = $$y
+type
+  Context* = ref object
+    master: AsyncSocket
+    workers: seq[AsyncSocket]
+
+  ClientApp* = Context -> void
 
 
-proc main() {.async.} =
-  var client = newAsyncSocket()
-  await client.connect("localhost", Port(12345))
+proc remoteCall*(ctx: Context, f: proc) {.async.} =
 
-  #await client.send("Hello world\c\L")
-  #await client.sendMsg("Hello world")
-  let msg = (globalSquare, 42)
-  await client.sendMsg(msg)
-
-  #let response = await client.recvLine()
-  #echo "Received: " & response & "!"
+  let procId = lookupProc(f)
+  await ctx.master.sendMsg(msgRemoteCall(procId))
 
 
-proc runDriver*() =
-  waitFor main()
+proc driverMain(clientApp: ClientApp) {.async.} =
+  echo "Trying to connect to master"
+  var master = newAsyncSocket()
+  await master.connectRetrying("localhost", Port(12345))
+  await master.sendMsg(msgRegisterDriver())
+
+  let ctx = Context(
+    master: master,
+    workers: newSeq[AsyncSocket](),
+  )
+
+  clientApp(ctx)
+
+
+proc runDriver*(clientApp: ClientApp) =
+  waitFor driverMain(clientApp)

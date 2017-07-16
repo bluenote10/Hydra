@@ -7,8 +7,10 @@ import serialization
 type
   SerializedProc = (string -> string)
 
-var registeredProcs = newTable[int, SerializedProc]()
-var procIdLookup = newTable[pointer, int]()
+var registeredProcs {.threadvar.}: Table[int, SerializedProc] # = initTable[int, SerializedProc]()
+var procIdLookup {.threadvar.}: Table[pointer, int] # = initTable[pointer, int]()
+registeredProcs = initTable[int, SerializedProc]()
+procIdLookup = initTable[pointer, int]()
 var procId = 0
 
 macro remote*(procDef: untyped): untyped =
@@ -64,7 +66,7 @@ template remote*(n) =
 # proc cubic(x: string): string {.remote.} = "cubed"
 
 
-proc genericCall(id: int, x: string): string =
+proc callById*(id: int, x: string): string =
   echo "looking up id ", id
   let f = registeredProcs[id]
   result = f(x)
@@ -74,7 +76,17 @@ proc genericCall*(f: proc, x: string): string =
   let p = cast[pointer](f)
   if procIdLookup.hasKey(p):
     let id = procIdLookup[p]
-    result = genericCall(id, x)
+    result = callById(id, x)
+  else:
+    raise newException(ValueError, "Can't find passed in proc in remote proc list.")
+
+
+proc lookupProc*(f: proc): int =
+  echo "looking up func ", cast[int](f)
+  let p = cast[pointer](f)
+  if procIdLookup.hasKey(p):
+    let id = procIdLookup[p]
+    return id
   else:
     raise newException(ValueError, "Can't find passed in proc in remote proc list.")
 

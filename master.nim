@@ -2,28 +2,42 @@ import asyncnet, asyncdispatch
 import marshal
 import future
 import net_utils
+import messages
 
 
-proc handleDriver(client: AsyncSocket) {.async.} =
-
-  while true:
-
-    var msgSize = 0
-
-    let numRead = await client.recvInto(msgSize.addr, sizeOf(int))
-    if numRead != sizeOf(int):
-      break
+type
+  Master = ref object
+    driver: AsyncSocket
+    workers: seq[AsyncSocket]
 
 
-proc handleWorker(client: AsyncSocket) {.async.} =
+
+proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
 
   while true:
 
-    var msgSize = 0
+    let msg = await driver.receiveMsg(Message)
+    case msg.kind
+    of MsgKind.RemoteCall:
+      echo "received request to call remote proc: ", msg.procId
+      if master.workers.len > 0:
+        await master.workers[0].sendMsg(msg)
+    else:
+      echo "Received illegal welcome message: " & $msg
 
-    let numRead = await client.recvInto(msgSize.addr, sizeOf(int))
-    if numRead != sizeOf(int):
-      break
+
+proc handleWorker(master: Master, worker: AsyncSocket) {.async.} =
+
+  while true:
+
+    let msg = await worker.receiveMsg(Message)
+
+
+proc msgLoop(master: Master) {.async.} =
+
+  while true:
+    echo "master main loop. connected workers: ", master.workers.len, " connected driver ", (not master.driver.isNil)
+    await sleepAsync(1000)
 
 
 proc listen() {.async.} =
@@ -32,18 +46,30 @@ proc listen() {.async.} =
   server.bindAddr(Port(12345))
   server.listen()
 
+  var master = Master(driver: nil, workers: newSeq[AsyncSocket]())
+
+  asyncCheck master.msgLoop()
+
   while true:
     echo "Waiting for client connections"
-    let client = await server.accept()
+    let newClient = await server.accept()
 
-    var clientType = await client.receiveMsg(string)
+    var msg = await newClient.receiveMsg(Message)
 
-    if clientType == "driver":
-      showConnectionDetails(client, "driver")
-      asyncCheck handleDriver(client)
+    case msg.kind
+    of MsgKind.RegisterDriver:
+      showConnectionDetails(newClient, "driver")
+      if master.driver.isNil():
+        master.driver = newClient
+      else:
+        echo "ERROR: Refused driver registration. Driver already connected."
+      asyncCheck master.handleDriver(newClient)
+    of MsgKind.RegisterWorker:
+      showConnectionDetails(newClient, "worker")
+      master.workers.add(newClient)
+      asyncCheck master.handleWorker(newClient)
     else:
-      showConnectionDetails(client, "worker")
-      asyncCheck handleWorker(client)
+      echo "Received illegal welcome message: " & $msg
 
 
 proc runMaster*() =
