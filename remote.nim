@@ -5,13 +5,14 @@ import serialization
 
 
 type
+  ProcId* = int
   SerializedProc = (string -> string)
 
-var registeredProcs {.threadvar.}: Table[int, SerializedProc] # = initTable[int, SerializedProc]()
-var procIdLookup {.threadvar.}: Table[pointer, int] # = initTable[pointer, int]()
-registeredProcs = initTable[int, SerializedProc]()
+var registeredProcs {.threadvar.}: Table[ProcId, SerializedProc] # = initTable[int, SerializedProc]()
+var procIdLookup {.threadvar.}: Table[pointer, ProcId] # = initTable[pointer, int]()
+registeredProcs = initTable[ProcId, SerializedProc]()
 procIdLookup = initTable[pointer, int]()
-var procId = 0
+var procId = ProcId(0)
 
 macro remote*(procDef: untyped): untyped =
   expectKind procDef, nnkProcDef

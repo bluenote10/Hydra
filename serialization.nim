@@ -13,45 +13,13 @@ proc serialize*(s: Stream, x: string) =
   s.write(x.len)
   s.write(x)
 
-
-proc serialize*[T](s: Stream, x: seq[T]) =
-  s.write(x.len)
-  # TODO we need to differentiate between native / fixed-width types
-  var tmp: seq[T]
-  shallowCopy(tmp, x)
-  s.writeData(addr(tmp[0]), sizeof(T) * x.len)
-  # General solution would require
-  # for i in 0 ..< x.len:
-  #   s.serialize(x[i])
-
-proc serialize*[N, T](s: Stream, x: array[N, T]) =
-  s.write(x.len)
-  # TODO we need to differentiate between native / fixed-width types
-  var tmp: array[N, T]
-  shallowCopy(tmp, x)
-  s.writeData(addr(tmp[0]), sizeof(T) * x.len)
-  # General solution would require
-  # for i in 0 ..< x.len:
-  #   s.serialize(x[i])
-
-#[
-# Attempt to merge seq+array versions into openarray seems to be tricky here
-#
 proc serialize*[T](s: Stream, x: openarray[T]) =
   s.write(x.len)
   # TODO we need to differentiate between native / fixed-width types
-  when x is seq:
-    var tmp: seq[T]
-    shallowCopy(tmp, x)
-    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
-  else:
-    var tmp: array[1, T]
-    shallowCopy(tmp, cast[array[1, T]](x))
-    s.writeData(addr(tmp[0]), sizeof(T) * x.len)
+  s.writeData(unsafeAddr(x[0]), sizeof(T) * x.len)
   # General solution would require
   # for i in 0 ..< x.len:
   #   s.serialize(x[i])
-]#
 
 
 proc newEIO(msg: string): ref IOError =
