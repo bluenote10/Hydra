@@ -5,6 +5,16 @@ import strutils
 import messages
 
 
+proc `$`*(socket: AsyncSocket): string =
+  let socketHandle = socket.getFd()
+  let (address, port) = socketHandle.getPeerAddr(socketHandle.getSockDomain())
+  result = "$1:$2" % [address, $port]
+
+
+proc showConnectionDetails*(socket: AsyncSocket, clientName: string) =
+  echo "Received connection from $1 ($2)" % [$socket, clientName]
+
+
 proc connectRetrying*(socket: AsyncSocket, url: string, port: Port) {.async.} =
   var connected = false
   while not connected:
@@ -27,25 +37,33 @@ proc sendMsg*[T](socket: AsyncSocket, x: T) {.async.} =
 
 
 proc receiveMsg*(socket: AsyncSocket, T: typedesc): Future[T] {.async.} =
+  echo "Trying to receive message from ", $socket
+
   var msgSize: int
 
-  echo "trying to read size of message"
-  let numRead = await socket.recvInto(msgSize.addr, sizeOf(int))
-  echo numRead
-  if numRead != sizeOf(int):
-    raise newException(IOError, "Could not read expected number of bytes from socket.")
+  let futNumRead = socket.recvInto(msgSize.addr, sizeOf(int))
+  yield futNumRead
+  if futNumRead.failed():
+    socket.close()
+  else:
+    let numRead = futNumRead.read()
+    if numRead != sizeOf(int):
+      echo "WARNING: expected to read ", sizeOf(int), " bytes, but read: ", numRead
+      socket.close()
 
-  echo "trying to receive message of size ", msgSize
-  let rawMsg = await socket.recv(msgSize)
+    else:
+      let futRawMsg = socket.recv(msgSize)
+      yield futRawMsg
+      if futRawMsg.failed():
+        socket.close()
+      else:
+        let rawMsg = futRawMsg.read()
+        if rawMsg.len != msgSize:
+          echo "WARNING: expected to read ", msgSize, " bytes, but read: ", rawMsg.len
+          socket.close()
+        else:
+          result = to[T](rawMsg)
 
-  echo "trying to parse rawMsg: ", rawMsg
-  result = to[T](rawMsg)
-
-
-proc showConnectionDetails*(socket: AsyncSocket, clientName: string) =
-  let socketHandle = socket.getFd()
-  let (address, port) = socketHandle.getPeerAddr(socketHandle.getSockDomain())
-  echo "Received connection from $1:$2 ($3)" % [address, $port, clientName]
 
 #[
 type

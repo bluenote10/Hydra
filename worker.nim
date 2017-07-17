@@ -24,21 +24,23 @@ proc handleMaster(worker: Worker) {.async.} =
   while true:
 
     let msg = await master.receiveMsg(Message)
+    if master.isClosed(): break
+
     case msg.kind
     of MsgKind.RegisterData:
       echo "received request to register data: ", msg.key
       worker.kvStore[msg.key] = msg.data
     of MsgKind.RemoteCall:
       echo "received request to call remote proc: ", msg.procId
-      echo msg.args
       var args = newSeq[string](msg.args.len)
       for i in 0 ..< msg.args.len:
         let key = msg.args[i]
-        echo key, worker.kvStore[key]
         args[i] = worker.kvStore[key] # TODO handle missing keys...
       echo callById(msg.procId, args)
     else:
       echo "Received illegal welcome message: " & $msg
+
+  echo "Master disconnected"
 
 
 proc handleDriver(worker: Worker) {.async.} =
@@ -46,7 +48,10 @@ proc handleDriver(worker: Worker) {.async.} =
 
   while true:
 
-    let msg = await driver.receiveMsg(string)
+    let msg = await driver.receiveMsg(Message)
+    if driver.isClosed(): break
+
+  echo "Driver disconnected"
 
 
 proc listen() {.async.} =
@@ -73,6 +78,7 @@ proc listen() {.async.} =
     while true:
       echo "Waiting for driver connection"
       let driver = await server.accept()
+      echo "Received driver connect from: ", $driver
       worker.driver = driver
       await worker.handleDriver()
 

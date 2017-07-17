@@ -28,6 +28,18 @@ proc driverMain(clientApp: ClientApp) {.async.} =
   await master.connectRetrying("localhost", Port(12345))
   await master.sendMsg(msgRegisterDriver())
 
+  # Worker connection just for testing purposes. Eventually
+  # worker connections should probably handled on-demand, i.e.,
+  # the worker will communicate "push data to worker XXX" or
+  # pull data from worker XXX" and the driver will have to
+  # maintain a connection pool. If a worker is not in the
+  # table of connections, the driver would either have to
+  # make a IP-address lookup request on the master, or the
+  # master includes the (immutable) connection details whenever
+  # it communicates the worker ID.
+  var worker = newAsyncSocket()
+  await worker.connectRetrying("localhost", Port(12346))
+
   let ctx = Context(
     master: master,
     workers: newSeq[AsyncSocket](),

@@ -17,6 +17,8 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
   while true:
 
     let msg = await driver.receiveMsg(Message)
+    if driver.isClosed(): break
+
     case msg.kind
     of MsgKind.RegisterData:
       echo "received request to register data: ", msg.key
@@ -35,19 +37,23 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
     else:
       echo "Received illegal welcome message: " & $msg
 
+  echo "Driver disconnected"
 
 proc handleWorker(master: Master, worker: AsyncSocket) {.async.} =
 
   while true:
 
     let msg = await worker.receiveMsg(Message)
+    if worker.isClosed(): break
+
+  echo "Worker disconnected"
 
 
 proc msgLoop(master: Master) {.async.} =
 
   while true:
-    echo "master main loop. connected workers: ", master.workers.len, " connected driver ", (not master.driver.isNil)
-    await sleepAsync(1000)
+    # echo "master main loop. connected workers: ", master.workers.len, " connected driver ", (not master.driver.isNil)
+    await sleepAsync(2000)
 
 
 proc listen() {.async.} =

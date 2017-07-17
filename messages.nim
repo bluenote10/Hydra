@@ -2,6 +2,8 @@
 type
 
   MsgKind* {.pure.} = enum
+    # uninitialized case so that receiveMsg return disconnect on no message
+    SocketDisconnected = 0,
     RegisterWorker,
     RegisterDriver,
     RemoteCall,
@@ -19,6 +21,9 @@ type
       discard
 
 
+proc msgSocketDisconnected*(): Message =
+  Message(kind: MsgKind.SocketDisconnected)
+
 proc msgRegisterWorker*(): Message =
   Message(kind: MsgKind.RegisterWorker)
 
@@ -30,3 +35,4 @@ proc msgRegisterData*(key: string, data: string): Message =
 
 proc msgRemoteCall*(procId: int, args: seq[string]): Message =
   Message(kind: MsgKind.RemoteCall, procId: procId, args: args)
+
