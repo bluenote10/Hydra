@@ -13,10 +13,13 @@ type
   ClientApp* = Context -> void
 
 
-proc remoteCall*(ctx: Context, f: proc) {.async.} =
+proc registerData*(ctx: Context, key: string, dataSerialized: string) {.async.} =
+  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized))
 
+
+proc remoteCall*(ctx: Context, f: proc, args: seq[string]) {.async.} =
   let procId = lookupProc(f)
-  await ctx.master.sendMsg(msgRemoteCall(procId))
+  await ctx.master.sendMsg(msgRemoteCall(procId, args))
 
 
 proc driverMain(clientApp: ClientApp) {.async.} =

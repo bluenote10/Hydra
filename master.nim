@@ -18,8 +18,18 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
 
     let msg = await driver.receiveMsg(Message)
     case msg.kind
+    of MsgKind.RegisterData:
+      echo "received request to register data: ", msg.key
+      # => forward message to worker -- TODO: proper scheduling
+      if master.workers.len > 0:
+        await master.workers[0].sendMsg(msg)
+      # In the next iteration we would not forward the key+data here
+      # but rather make it two steps: The client request a push of
+      # a key, and we communicate back a worker ID to which the
+      # key+value should be send.
     of MsgKind.RemoteCall:
       echo "received request to call remote proc: ", msg.procId
+      # => forward message to worker -- TODO: proper scheduling
       if master.workers.len > 0:
         await master.workers[0].sendMsg(msg)
     else:

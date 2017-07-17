@@ -103,25 +103,24 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
   var argStatements = newStmtList()
   var origProcCall = newCall(ident(origProcName))
 
-  template defineArg(argName, argType) {.dirty.} =
-    # Note: it's important to bind deserialize here where it is actually
+  template defineArg(argName, argType, argIndex) {.dirty.} =
+    # Note: it's important to bind restore here where it is actually
     # used and not in the context of the other template (where `bind`
-    # would not work for deserialize). Rule of thumb: bind in usage scope
-    bind deserialize
-    let argName = inStream.deserialize(argType)
+    # would not work for). Rule of thumb: bind in usage scope
+    bind restore
+    let argName = restore(args[argIndex], argType)
 
   for i, arg in args.pairs:
     let argName = ident("arg" & $i)
     let argType = arg[1]
-    argStatements.add(getAst(defineArg(argName, argType)))
+    argStatements.add(getAst(defineArg(argName, argType, i)))
     origProcCall.add(argName)
 
   # echo argStatements.repr
 
   template buildProc(procName, argStatements, origProc, origProcCall) {.dirty.} =
-    proc procName(s: string): string =
+    proc procName(args: varargs[string]): string =
       bind procName, newStringStream, serialize
-      var inStream = newStringStream(s)
       argStatements
       let origRes = origProcCall
       var outStream = newStringStream()
@@ -129,9 +128,8 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
       result = outStream.data
 
   template buildProcVoid(procName, argStatements, origProc, origProcCall) {.dirty.} =
-    proc procName(s: string): string =
+    proc procName(args: varargs[string]): string =
       bind procName, newStringStream, serialize
-      var inStream = newStringStream(s)
       argStatements
       origProcCall
       result = "" # return nil?

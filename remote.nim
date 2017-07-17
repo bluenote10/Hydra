@@ -6,7 +6,7 @@ import serialization
 
 type
   ProcId* = int
-  SerializedProc = (string -> string)
+  SerializedProc = (varargs[string] -> string)
 
 var registeredProcs {.threadvar.}: Table[ProcId, SerializedProc] # = initTable[int, SerializedProc]()
 var procIdLookup {.threadvar.}: Table[pointer, ProcId] # = initTable[pointer, int]()
@@ -67,10 +67,10 @@ template remote*(n) =
 # proc cubic(x: string): string {.remote.} = "cubed"
 
 
-proc callById*(id: int, x: string): string =
+proc callById*(id: int, args: seq[string]): string =
   echo "looking up id ", id
   let f = registeredProcs[id]
-  result = f(x)
+  result = f(args)
 
 proc genericCall*(f: proc, x: string): string =
   echo "looking up func ", cast[int](f)
