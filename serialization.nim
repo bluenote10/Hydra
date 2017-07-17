@@ -95,7 +95,8 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
 
   let formalParams = n[3]
   let args = formalParams.getChildren[1..<formalParams.len]
-  # let returnNode = formalParams[0]
+  let returnNode = formalParams[0]
+  let isVoidProc = returnNode.isEmpty()
   # echo returnNode.treeRepr
   # echo args.repr
 
@@ -127,12 +128,29 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
       outStream.serialize(origRes)
       result = outStream.data
 
-  result = getAst(buildProc(
-    ident($origProcName & "Serialized"),
-    argStatements,
-    ident($origProcName),
-    origProcCall
-  ))
+  template buildProcVoid(procName, argStatements, origProc, origProcCall) {.dirty.} =
+    proc procName(s: string): string =
+      bind procName, newStringStream, serialize
+      var inStream = newStringStream(s)
+      argStatements
+      origProcCall
+      result = "" # return nil?
+
+  if not isVoidProc:
+    result = getAst(buildProc(
+      ident($origProcName & "Serialized"),
+      argStatements,
+      ident($origProcName),
+      origProcCall,
+    ))
+  else:
+    result = getAst(buildProcVoid(
+      ident($origProcName & "Serialized"),
+      argStatements,
+      ident($origProcName),
+      origProcCall,
+    ))
+
   # getAst gives a StmtList with the first statement being the proc def
   result = result[0]
   # echo result.repr

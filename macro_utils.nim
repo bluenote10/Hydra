@@ -26,3 +26,7 @@ proc getChildren*(n: NimNode): seq[NimNode] {.compileTime.} =
   result = newSeq[NimNode]()
   for child in n.children:
     result.add(child)
+
+
+proc isEmpty*(n: NimNode): bool {.compileTime.} =
+  n.kind == nnkEmpty

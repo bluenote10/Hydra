@@ -3,11 +3,12 @@ import driver
 import remote
 import asyncdispatch
 
-proc helloWorldProc1() =
-  echo "hello world from abroad"
+proc helloWorldProcNonRemote() =
+  echo "hello world from non-remote"
 
-proc helloWorldProc(): int {.remote.} =
+proc helloWorldProc() {.remote.} =
   echo "hello world from abroad"
+  helloWorldProcNonRemote()
 
 
 # proc
