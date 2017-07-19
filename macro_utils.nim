@@ -30,3 +30,13 @@ proc getChildren*(n: NimNode): seq[NimNode] {.compileTime.} =
 
 proc isEmpty*(n: NimNode): bool {.compileTime.} =
   n.kind == nnkEmpty
+
+
+macro scope*(body: untyped): untyped =
+  echo body.kind
+  if kind(body) != nnkDo:
+    result = body
+  else:
+    result = newNimNode(nnkStmtListExpr)
+    for child in body[6]: add(result, child)
+  echo result.treeRepr

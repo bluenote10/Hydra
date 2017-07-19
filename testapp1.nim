@@ -5,6 +5,9 @@ import driver
 import remote
 import serialization
 
+let floatSerializer = registerSerializer(float)
+let intSerializer = registerSerializer(int)
+let intSeqSerializer = registerSerializer(seq[int])
 
 proc helloWorldProcNonRemote() =
   echo "hello world from non-remote"
@@ -18,8 +21,11 @@ proc test2(x: float, i: int, data: seq[int]) {.remote.} =
 
 
 launcher do (ctx: Context):
-  waitFor ctx.registerData("i", store(42))
-  waitFor ctx.registerData("x", store(0.5))
-  waitFor ctx.registerData("data", store(@[1, 2, 3]))
-  waitFor ctx.remoteCall(helloWorldProc, @["i"])
-  waitFor ctx.remoteCall(test2, @["x", "i", "data"])
+  waitFor ctx.registerData("i", 42, intSerializer)
+  waitFor ctx.registerData("i", 0.5, floatSerializer)
+  waitFor ctx.registerData("data", @[1, 2, 3], intSeqSerializer)
+  #waitFor ctx.registerDataSerialized("i", store(42))
+  #waitFor ctx.registerDataSerialized("x", store(0.5))
+  #waitFor ctx.registerDataSerialized("data", store(@[1, 2, 3]))
+  #waitFor ctx.remoteCall(helloWorldProc, @["i"])
+  #waitFor ctx.remoteCall(test2, @["x", "i", "data"])

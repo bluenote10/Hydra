@@ -18,18 +18,23 @@ method getAddr*(a: AnyVal): pointer {.base.} =
 method getAddr*[T](a: AnyValRef[T]): pointer =
   result = addr(a.x)
 
+method `$`*(a: AnyVal): string {.base.} =
+  "AnyVal[base]"
+
+method `$`*[T](a: AnyValRef[T]): string =
+  "AnyVal[" & name(T) & "](" & $(a.x) & ")"
+
 template rawType(x: AnyVal): PNimType =
   cast[PNimType](x.rawTypePtr)
 
 template `rawType=`(x: var AnyVal, p: PNimType) =
   x.rawTypePtr = cast[pointer](p)
 
-proc toAnyVal*[T](x: var T): AnyVal =
-  AnyValRef[T](rawTypePtr: cast[PNimType](getTypeInfo(x)), x: x)
-
-proc to*(anyval: AnyVal, T: typedesc): T =
-  # echo "reconstructing type ", name(T), " of size ", sizeOf(T)
-  copyMem(result.addr, anyval.getAddr(), sizeOf(T))
+proc ofType*(a: AnyVal, X: typedesc): bool =
+  if a of AnyValRef[X]:
+    true
+  else:
+    false
 
 proc isType(anyval: AnyVal, T: typedesc): bool =
   # Type check based on getTypeInfo() => maybe not needed
@@ -43,6 +48,15 @@ proc isType(anyval: AnyVal, T: typedesc): bool =
   # only a necessary condition, not sufficient
   result = expType.kind == gvnType.kind
 
+proc toAnyVal*[T](x: var T): AnyVal =
+  AnyValRef[T](rawTypePtr: cast[PNimType](getTypeInfo(x)), x: x)
+
+proc to*(anyval: AnyVal, T: typedesc): T =
+  # echo "reconstructing type ", name(T), " of size ", sizeOf(T)
+  assert anyVal.ofType(T)
+  copyMem(result.addr, anyval.getAddr(), sizeOf(T))
+
+
 #[
 # Alternative type check based on method call
 # => deprecated because of "generic method not attachable to object"
@@ -55,12 +69,6 @@ method ofType[T](a: AnyValRef[T], X: typedesc): bool =
   else:
     false
 ]#
-
-proc ofType*(a: AnyVal, X: typedesc): bool =
-  if a of AnyValRef[X]:
-    true
-  else:
-    false
 
 proc kind*(x: AnyVal): AnyKind =
   result = AnyKind(ord(x.rawType.kind))

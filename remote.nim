@@ -1,8 +1,9 @@
 import macros, macro_utils
 import future
+import typetraits
 import tables
 import serialization
-
+import anyval
 
 type
   ProcId* = int
@@ -93,3 +94,120 @@ proc lookupProc*(f: proc): int =
 
 # echo genericCall(0, "")
 # echo genericCall(1, "")
+
+
+when false:
+  ## Examples of macro transformations.
+
+  ## Input function annotated with {.remote.}
+  proc test(x: float; i: int; data: seq[int]) =
+    echo "called with: ", x, ", ", i, ", ", data
+
+  ## Currently produces:
+  proc testSerialized(args: varargs[string]): string =
+    let arg0 = restore(args[0], float)
+    let arg1 = restore(args[1], int)
+    let arg2 = restore(args[2], seq[int])
+    test2(arg0, arg1, arg2)
+    result = ""
+
+  []=(registeredProcs, procId, testSerialized)
+  []=(procIdLookup, cast[pointer](test), procId)
+  procId += 1
+
+  registeredProcs[procId] = testSerialized
+  procIdLookup[cast[pointer](test)] = procId
+
+  ## For AnyVal we would need
+  proc testNormalized(args: varargs[AnyVal]): AnyVal =
+    let arg0 = args[0].to(float)
+    let arg1 = args[1].to(int)
+    let arg2 = args[2].to(seq[int])
+    test2(arg0, arg1, arg2)
+    # and for non-void result types something like
+    result = toAnyVal(result)
+
+  ## And in addition serializers/deserializer for all args + output
+  proc testSerializedArg0Serializer(x: float) = store(x)
+  proc testSerializedArg0Deserializer(s: string) = restore(s, float)
+  ## Or should it rather be
+  proc testSerializedArg0Serializer(x: AnyVal): string =
+    let actualX = x.to(float)
+    result = store(x)
+  proc testSerializedArg0Deserializer(s: string): AnyVal =
+    let actualX = restore(s, float)
+    result = actualX.toAnyVal
+
+
+#[
+proc registerSerializer*(T: typedesc) =
+  let dummy: T
+  let typeInfo = getTypeInfo(dummy)
+  let typeAddr = cast[pointer](typeInfo)
+]#
+
+type
+  Serializer*[T] = object
+    id: int
+  #Serializer = ref object of RootObj
+  #SerializerTyped[T] = ref object of Serializer
+
+  AnySerProc = (AnyVal -> string)
+  AnyDeserProc = (string -> AnyVal)
+
+  SerId = int
+
+proc `$`*[T](s: Serializer[T]): string =
+  "Serializer[" & name(T) & "]"
+
+proc getId*[T](s: Serializer[T]): int = s.id
+
+#[
+proc storeAny[T](s: Serializer[T], a: AnyVal): string =
+  if not a.ofType(T):
+    raise newException(ValueError, "Type of AnyVal does not match to type of serializer")
+  let actualValue = a.to(T)
+  result = store(actualValue)
+
+proc restoreAny[T](s: Serializer[T], data: string): AnyVal =
+  let actualValue = restore(data, T) # TODO try except
+  result = actualValue.toAnyVal
+]#
+
+proc storeAny[T](s: Serializer[T]): AnySerProc =
+  result =
+    proc(a: AnyVal): string =
+      if not a.ofType(T):
+        raise newException(ValueError, "Type of AnyVal does not match to type of serializer")
+      let actualValue = a.to(T)
+      result = store(actualValue)
+
+proc restoreAny[T](s: Serializer[T]): AnyDeserProc =
+  result =
+    proc(data: string): AnyVal =
+      var actualValue = restore(data, T) # TODO try except
+      result = actualValue.toAnyVal
+
+var regSerId = SerId(0)
+var regAnySerProc = newTable[SerId, AnySerProc]()
+var regAnyDeserProc = newTable[SerId, AnyDeserProc]()
+
+macro registerSerializer*(T: typedesc): Serializer[T] =
+
+  template buildAst(T) =
+    bind Serializer, ofType
+    echo "registering serializer for: ", name(T)
+    let serializer = Serializer[T](id: regSerId)
+    regAnySerProc[regSerId] = storeAny[T](serializer)
+    regAnyDeserProc[regSerId] = restoreAny[T](serializer)
+    regSerId += 1
+    serializer
+
+  #template enti
+  result = getAst(buildAst(T))
+  echo result.repr
+
+proc lookupDeserializer*(serId: int): AnyDeserProc =
+  regAnyDeserProc[serId]
+
+

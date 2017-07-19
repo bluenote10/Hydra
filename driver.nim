@@ -1,6 +1,7 @@
 import future
 import asyncnet, asyncdispatch
 import remote
+import serialization
 import net_utils
 import messages
 
@@ -13,8 +14,13 @@ type
   ClientApp* = Context -> void
 
 
-proc registerData*(ctx: Context, key: string, dataSerialized: string) {.async.} =
-  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized))
+proc registerData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]) {.async.} =
+  let dataSerialized = store(x)
+  let serId = serializer.getId()
+  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized, serId))
+
+proc registerDataSerialized*(ctx: Context, key: string, dataSerialized: string) {.async.} =
+  discard # await ctx.master.sendMsg(msgRegisterData(key, dataSerialized))
 
 
 proc remoteCall*(ctx: Context, f: proc, args: seq[string]) {.async.} =

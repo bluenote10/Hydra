@@ -7,7 +7,7 @@ import net_utils
 import messages
 
 import remote
-
+import anyval
 
 
 type
@@ -16,6 +16,7 @@ type
     master: AsyncSocket
     workers: seq[AsyncSocket]
     kvStore: TableRef[string, string] not nil
+    kvStore2: TableRef[string, AnyVal] not nil
 
 
 proc handleMaster(worker: Worker) {.async.} =
@@ -30,6 +31,11 @@ proc handleMaster(worker: Worker) {.async.} =
     of MsgKind.RegisterData:
       echo "received request to register data: ", msg.key
       worker.kvStore[msg.key] = msg.data
+      let serId = msg.serializerId
+      echo "trying to lookup deserializer with id: ", serId
+      let deser = lookupDeserializer(serId)
+      let anyval = deser(msg.data)
+      echo anyval
     of MsgKind.RemoteCall:
       echo "received request to call remote proc: ", msg.procId
       var args = newSeq[string](msg.args.len)
@@ -63,6 +69,7 @@ proc listen() {.async.} =
   let worker = Worker(
     workers: newSeq[AsyncSocket](),
     kvStore: newTable[string, string](),
+    kvStore2: newTable[string, AnyVal](),
   )
 
   # connect to master
