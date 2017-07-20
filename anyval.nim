@@ -22,7 +22,10 @@ method `$`*(a: AnyVal): string {.base.} =
   "AnyVal[base]"
 
 method `$`*[T](a: AnyValRef[T]): string =
-  "AnyVal[" & name(T) & "](" & $(a.x) & ")"
+  when compiles($a.x):
+    "AnyVal[" & name(T) & "](" & $(a.x) & ")"
+  else:
+    "AnyVal[" & name(T) & "](" & repr(a.x) & ")"
 
 template rawType(x: AnyVal): PNimType =
   cast[PNimType](x.rawTypePtr)

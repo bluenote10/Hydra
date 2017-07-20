@@ -2,6 +2,7 @@ import macros, macro_utils
 import typeinfo
 import streams
 import typeinfo
+import anyval
 
 
 proc serialize*[T: SomeInteger|SomeReal](s: Stream, x: T) =
@@ -104,11 +105,11 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
   var origProcCall = newCall(ident(origProcName))
 
   template defineArg(argName, argType, argIndex) {.dirty.} =
-    # Note: it's important to bind restore here where it is actually
+    # Note: it's important to bind here where it is actually
     # used and not in the context of the other template (where `bind`
     # would not work for). Rule of thumb: bind in usage scope
-    bind restore
-    let argName = restore(args[argIndex], argType)
+    bind to
+    let argName = to(args[argIndex], argType)
 
   for i, arg in args.pairs:
     let argName = ident("arg" & $i)
@@ -119,8 +120,8 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
   # echo argStatements.repr
 
   template buildProc(procName, argStatements, origProc, origProcCall) {.dirty.} =
-    proc procName(args: varargs[string]): string =
-      bind procName, newStringStream, serialize
+    bind AnyVal, toAnyVal, procName
+    proc procName(args: varargs[AnyVal]): AnyVal =
       argStatements
       let origRes = origProcCall
       var outStream = newStringStream()
@@ -128,11 +129,12 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
       result = outStream.data
 
   template buildProcVoid(procName, argStatements, origProc, origProcCall) {.dirty.} =
-    proc procName(args: varargs[string]): string =
-      bind procName, newStringStream, serialize
+    bind AnyVal, toAnyVal, procName
+    proc procName(args: varargs[AnyVal]): AnyVal =
       argStatements
       origProcCall
-      result = "" # return nil?
+      var dummyReturn: pointer = nil
+      result = toAnyVal(dummyReturn) # return nil?
 
   if not isVoidProc:
     result = getAst(buildProc(
@@ -149,8 +151,9 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
       origProcCall,
     ))
 
-  # getAst gives a StmtList with the first statement being the proc def
-  result = result[0]
+  # getAst gives a StmtList and we want to extract the proc definition.
+  # Due to the bind statement in the first line, we need index 1.
+  result = result[1]
   # echo result.repr
   # echo result.treeRepr
 

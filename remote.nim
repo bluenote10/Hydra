@@ -7,7 +7,7 @@ import anyval
 
 type
   ProcId* = int
-  SerializedProc = (varargs[string] -> string)
+  SerializedProc = (varargs[AnyVal] -> AnyVal)
 
 var registeredProcs {.threadvar.}: Table[ProcId, SerializedProc] # = initTable[int, SerializedProc]()
 var procIdLookup {.threadvar.}: Table[pointer, ProcId] # = initTable[pointer, int]()
@@ -68,7 +68,7 @@ template remote*(n) =
 # proc cubic(x: string): string {.remote.} = "cubed"
 
 
-proc callById*(id: int, args: seq[string]): string =
+proc callById*(id: int, args: seq[AnyVal]): AnyVal =
   echo "looking up id ", id
   let f = registeredProcs[id]
   result = f(args)
@@ -211,3 +211,8 @@ proc lookupDeserializer*(serId: int): AnyDeserProc =
   regAnyDeserProc[serId]
 
 
+
+proc checkTypeAddr*(T: typedesc) =
+  var dummy: T
+  let p = getTypeInfo(dummy)
+  echo name(T), " @ ", cast[int](p)

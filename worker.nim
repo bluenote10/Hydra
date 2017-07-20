@@ -36,12 +36,13 @@ proc handleMaster(worker: Worker) {.async.} =
       let deser = lookupDeserializer(serId)
       let anyval = deser(msg.data)
       echo anyval
+      worker.kvStore2[msg.key] = anyval
     of MsgKind.RemoteCall:
       echo "received request to call remote proc: ", msg.procId
-      var args = newSeq[string](msg.args.len)
+      var args = newSeq[AnyVal](msg.args.len)
       for i in 0 ..< msg.args.len:
         let key = msg.args[i]
-        args[i] = worker.kvStore[key] # TODO handle missing keys...
+        args[i] = worker.kvStore2[key] # TODO handle missing keys...
       echo callById(msg.procId, args)
     else:
       echo "Received illegal welcome message: " & $msg
