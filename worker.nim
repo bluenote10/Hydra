@@ -8,15 +8,14 @@ import messages
 
 import remote
 import anyval
-
+from logger import nil
 
 type
   Worker = ref object
     driver: AsyncSocket
     master: AsyncSocket
     workers: seq[AsyncSocket]
-    kvStore: TableRef[string, string] not nil
-    kvStore2: TableRef[string, AnyVal] not nil
+    kvStore: TableRef[string, AnyVal] not nil
 
 
 proc handleMaster(worker: Worker) {.async.} =
@@ -29,25 +28,24 @@ proc handleMaster(worker: Worker) {.async.} =
 
     case msg.kind
     of MsgKind.RegisterData:
-      echo "received request to register data: ", msg.key
-      worker.kvStore[msg.key] = msg.data
+      logger.info("received request to register data: ", msg.key)
       let serId = msg.serializerId
-      echo "trying to lookup deserializer with id: ", serId
-      let deser = lookupDeserializer(serId)
-      let anyval = deser(msg.data)
-      echo anyval
-      worker.kvStore2[msg.key] = anyval
+      logger.info("trying to lookup deserializer with id: ", serId)
+      let deserProc = lookupDeserializerProc(serId)
+      let anyval = deserProc(msg.data)
+      logger.info(anyval)
+      worker.kvStore[msg.key] = anyval
     of MsgKind.RemoteCall:
-      echo "received request to call remote proc: ", msg.procId
+      logger.info("received request to call remote proc: ", msg.procId)
       var args = newSeq[AnyVal](msg.args.len)
       for i in 0 ..< msg.args.len:
         let key = msg.args[i]
-        args[i] = worker.kvStore2[key] # TODO handle missing keys...
-      echo callById(msg.procId, args)
+        args[i] = worker.kvStore[key] # TODO handle missing keys...
+      logger.info(callById(msg.procId, args))
     else:
-      echo "Received illegal welcome message: " & $msg
+      logger.info("Received illegal welcome message: " & $msg)
 
-  echo "Master disconnected"
+  logger.info("Master disconnected")
 
 
 proc handleDriver(worker: Worker) {.async.} =
@@ -58,7 +56,7 @@ proc handleDriver(worker: Worker) {.async.} =
     let msg = await driver.receiveMsg(Message)
     if driver.isClosed(): break
 
-  echo "Driver disconnected"
+  logger.info("Driver disconnected")
 
 
 proc listen() {.async.} =
@@ -69,13 +67,12 @@ proc listen() {.async.} =
 
   let worker = Worker(
     workers: newSeq[AsyncSocket](),
-    kvStore: newTable[string, string](),
-    kvStore2: newTable[string, AnyVal](),
+    kvStore: newTable[string, AnyVal](),
   )
 
   # connect to master
   while true:
-    echo "Trying to connect to master"
+    logger.info("Trying to connect to master")
     var master = newAsyncSocket()
     await master.connectRetrying("localhost", Port(12345))
     await master.sendMsg(msgRegisterWorker())
@@ -84,14 +81,14 @@ proc listen() {.async.} =
     asyncCheck worker.handleMaster()
 
     while true:
-      echo "Waiting for driver connection"
+      logger.info("Waiting for driver connection")
       let driver = await server.accept()
-      echo "Received driver connect from: ", $driver
+      logger.info("Received driver connect from: ", $driver)
       worker.driver = driver
       await worker.handleDriver()
 
 
 proc runWorker*() =
-  echo "Running worker"
+  logger.info("Running worker")
   asyncCheck listen()
   runForever()

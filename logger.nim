@@ -3,13 +3,13 @@ import times
 import boost.richstring
 
 type
-  Level = enum
+  Level* = enum
     Debug = "DEBUG",
     Info = "INFO",
     Warn = "WARN",
     Error = "ERROR"
 
-var level: Level = Debug
+var logLevel: Level = Debug
 
 
 macro appendVarargToCall(c: untyped, prefix: string, e: untyped): untyped {.used.} =
@@ -21,13 +21,14 @@ macro appendVarargToCall(c: untyped, prefix: string, e: untyped): untyped {.used
 
 template log*(level: Level, args: varargs[string, `$`]) {.dirty.} =
   ## Logs a message to all registered handlers at the given level.
-
-  if level >= logger.level:
+  bind logLevel, getClockStr, fmt, level, appendVarargToCall
+  if level >= logLevel:
     let time = getClockStr()
     let io = instantiationInfo()
     #let prefix = time & " | " & io.filename & ":" & $io.line & " | " & $level & " | "
     let file = fmt"${io.filename}:${io.line}"
-    let prefix = fmt "$time | ${file}%-30s | $level%-5s | "
+    let levelLocal = level
+    let prefix = fmt "$time | ${file}%-30s | $levelLocal%-5s | "
     appendVarargToCall(echo(), prefix, args)
 
 template debug*(args: varargs[string, `$`]) =

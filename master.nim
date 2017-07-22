@@ -3,6 +3,7 @@ import marshal
 import future
 import net_utils
 import messages
+from logger import nil
 
 
 type
@@ -21,7 +22,7 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
 
     case msg.kind
     of MsgKind.RegisterData:
-      echo "received request to register data: ", msg.key
+      logger.info("received request to register data: ", msg.key)
       # => forward message to worker -- TODO: proper scheduling
       if master.workers.len > 0:
         await master.workers[0].sendMsg(msg)
@@ -30,14 +31,14 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
       # a key, and we communicate back a worker ID to which the
       # key+value should be send.
     of MsgKind.RemoteCall:
-      echo "received request to call remote proc: ", msg.procId
+      logger.info("received request to call remote proc: ", msg.procId)
       # => forward message to worker -- TODO: proper scheduling
       if master.workers.len > 0:
         await master.workers[0].sendMsg(msg)
     else:
-      echo "Received illegal welcome message: " & $msg
+      logger.info("Received illegal welcome message: " & $msg)
 
-  echo "Driver disconnected"
+  logger.info("Driver disconnected")
 
 proc handleWorker(master: Master, worker: AsyncSocket) {.async.} =
 
@@ -46,7 +47,7 @@ proc handleWorker(master: Master, worker: AsyncSocket) {.async.} =
     let msg = await worker.receiveMsg(Message)
     if worker.isClosed(): break
 
-  echo "Worker disconnected"
+  logger.info("Worker disconnected")
 
 
 proc msgLoop(master: Master) {.async.} =
@@ -67,7 +68,7 @@ proc listen() {.async.} =
   asyncCheck master.msgLoop()
 
   while true:
-    echo "Waiting for client connections"
+    logger.info("Waiting for client connections")
     let newClient = await server.accept()
 
     var msg = await newClient.receiveMsg(Message)
@@ -78,17 +79,17 @@ proc listen() {.async.} =
       if master.driver.isNil():
         master.driver = newClient
       else:
-        echo "ERROR: Refused driver registration. Driver already connected."
+        logger.info("ERROR: Refused driver registration. Driver already connected.")
       asyncCheck master.handleDriver(newClient)
     of MsgKind.RegisterWorker:
       showConnectionDetails(newClient, "worker")
       master.workers.add(newClient)
       asyncCheck master.handleWorker(newClient)
     else:
-      echo "Received illegal welcome message: " & $msg
+      logger.info("Received illegal welcome message: " & $msg)
 
 
 proc runMaster*() =
-  echo "Running master"
+  logger.info("Running master")
   asyncCheck listen()
   runForever()

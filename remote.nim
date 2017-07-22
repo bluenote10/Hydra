@@ -4,6 +4,11 @@ import typetraits
 import tables
 import serialization
 import anyval
+from logger import nil
+
+# -----------------------------------------------------------------------------
+# remote proc registration
+# -----------------------------------------------------------------------------
 
 type
   ProcId* = int
@@ -30,9 +35,9 @@ macro remote*(procDef: untyped): untyped =
   template addRegProc(procDef, sProcDef, origName, origIdent, sProcIdent) =
     procDef
     sProcDef
-    bind `sProcIdent`
+    bind `sProcIdent`, logger.info
     # The lookup memory addr must be the one of orig, because that's what the user will pass in
-    echo "Registering proc ", origName, " as ID ", procId, " [addr: ", cast[int](origIdent), "]"
+    logger.info("Registering proc ", origName, " as ID ", procId, " [addr: ", cast[int](origIdent), "]")
     # The registered proc on the other hand must be the serialized one
     registeredProcs[procId] = sProcIdent
     procIdLookup[cast[pointer](origIdent)] = procId
@@ -49,32 +54,13 @@ macro remote*(procDef: untyped): untyped =
   # echo result.treeRepr
 
 
-#[
-macro checkNode(n: untyped): untyped =
-  echo n.kind
-  echo n.treerepr
-
-template remote*(n) =
-  #echo "registering function: ", n
-
-  discard checkNode(n)
-  static:
-    registeredProcs &= "a"
-    echo registeredProcs
-  n
-]#
-
-# proc square*(x: float, y: float): int {.remote.} = 1
-# proc cubic(x: string): string {.remote.} = "cubed"
-
-
 proc callById*(id: int, args: seq[AnyVal]): AnyVal =
-  echo "looking up id ", id
+  logger.info "looking up id ", id
   let f = registeredProcs[id]
   result = f(args)
 
 proc genericCall*(f: proc, x: string): string =
-  echo "looking up func ", cast[int](f)
+  logger.info "looking up func ", cast[int](f)
   let p = cast[pointer](f)
   if procIdLookup.hasKey(p):
     let id = procIdLookup[p]
@@ -84,7 +70,7 @@ proc genericCall*(f: proc, x: string): string =
 
 
 proc lookupProc*(f: proc): int =
-  echo "looking up func ", cast[int](f)
+  logger.info "looking up func ", cast[int](f)
   let p = cast[pointer](f)
   if procIdLookup.hasKey(p):
     let id = procIdLookup[p]
@@ -92,18 +78,15 @@ proc lookupProc*(f: proc): int =
   else:
     raise newException(ValueError, "Can't find passed in proc in remote proc list.")
 
-# echo genericCall(0, "")
-# echo genericCall(1, "")
-
 
 when false:
-  ## Examples of macro transformations.
+  # Examples of macro transformations.
 
-  ## Input function annotated with {.remote.}
+  # Input function annotated with {.remote.}
   proc test(x: float; i: int; data: seq[int]) =
     echo "called with: ", x, ", ", i, ", ", data
 
-  ## Currently produces:
+  # Currently produces:
   proc testSerialized(args: varargs[string]): string =
     let arg0 = restore(args[0], float)
     let arg1 = restore(args[1], int)
@@ -127,30 +110,13 @@ when false:
     # and for non-void result types something like
     result = toAnyVal(result)
 
-  ## And in addition serializers/deserializer for all args + output
-  proc testSerializedArg0Serializer(x: float) = store(x)
-  proc testSerializedArg0Deserializer(s: string) = restore(s, float)
-  ## Or should it rather be
-  proc testSerializedArg0Serializer(x: AnyVal): string =
-    let actualX = x.to(float)
-    result = store(x)
-  proc testSerializedArg0Deserializer(s: string): AnyVal =
-    let actualX = restore(s, float)
-    result = actualX.toAnyVal
-
-
-#[
-proc registerSerializer*(T: typedesc) =
-  let dummy: T
-  let typeInfo = getTypeInfo(dummy)
-  let typeAddr = cast[pointer](typeInfo)
-]#
+# -----------------------------------------------------------------------------
+# remote proc registration
+# -----------------------------------------------------------------------------
 
 type
   Serializer*[T] = object
     id: int
-  #Serializer = ref object of RootObj
-  #SerializerTyped[T] = ref object of Serializer
 
   AnySerProc = (AnyVal -> string)
   AnyDeserProc = (string -> AnyVal)
@@ -161,18 +127,6 @@ proc `$`*[T](s: Serializer[T]): string =
   "Serializer[" & name(T) & "]"
 
 proc getId*[T](s: Serializer[T]): int = s.id
-
-#[
-proc storeAny[T](s: Serializer[T], a: AnyVal): string =
-  if not a.ofType(T):
-    raise newException(ValueError, "Type of AnyVal does not match to type of serializer")
-  let actualValue = a.to(T)
-  result = store(actualValue)
-
-proc restoreAny[T](s: Serializer[T], data: string): AnyVal =
-  let actualValue = restore(data, T) # TODO try except
-  result = actualValue.toAnyVal
-]#
 
 proc storeAny[T](s: Serializer[T]): AnySerProc =
   result =
@@ -188,31 +142,38 @@ proc restoreAny[T](s: Serializer[T]): AnyDeserProc =
       var actualValue = restore(data, T) # TODO try except
       result = actualValue.toAnyVal
 
+
 var regSerId = SerId(0)
 var regAnySerProc = newTable[SerId, AnySerProc]()
 var regAnyDeserProc = newTable[SerId, AnyDeserProc]()
+var regSerTypes = newTable[pointer, SerId]()
 
-macro registerSerializer*(T: typedesc): Serializer[T] =
+macro registerSerializer*(T: typedesc): untyped =
 
   template buildAst(T) =
-    bind Serializer, ofType
-    echo "registering serializer for: ", name(T)
+    bind Serializer, ofType, logger.info
+    logger.info("registering serializer for: ", name(T))
     let serializer = Serializer[T](id: regSerId)
     regAnySerProc[regSerId] = storeAny[T](serializer)
     regAnyDeserProc[regSerId] = restoreAny[T](serializer)
+
+    # register type:
+    var dummy: T
+    let typeAddr = getTypeInfo(dummy)
+    regSerTypes[typeAddr] = regSerId
+
     regSerId += 1
-    serializer
+    # serializer
 
-  #template enti
   result = getAst(buildAst(T))
-  echo result.repr
+  # echo result.repr
 
-proc lookupDeserializer*(serId: int): AnyDeserProc =
-  regAnyDeserProc[serId]
-
-
-
-proc checkTypeAddr*(T: typedesc) =
+proc lookupSerializerId*(T: typedesc): SerId =
   var dummy: T
-  let p = getTypeInfo(dummy)
-  echo name(T), " @ ", cast[int](p)
+  let typeAddr = getTypeInfo(dummy)
+  let serId = regSerTypes[typeAddr]
+  result = serId
+
+proc lookupDeserializerProc*(serId: int): AnyDeserProc =
+  result = regAnyDeserProc[serId]
+

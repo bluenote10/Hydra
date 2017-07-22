@@ -4,7 +4,7 @@ import remote
 import serialization
 import net_utils
 import messages
-
+from logger import nil
 
 type
   Context* = ref object
@@ -19,8 +19,10 @@ proc registerData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]
   let serId = serializer.getId()
   await ctx.master.sendMsg(msgRegisterData(key, dataSerialized, serId))
 
-proc registerDataSerialized*(ctx: Context, key: string, dataSerialized: string) {.async.} =
-  discard # await ctx.master.sendMsg(msgRegisterData(key, dataSerialized))
+proc registerData*[T](ctx: Context, key: string, x: T) {.async.} =
+  let dataSerialized = store(x)
+  let serId = lookupSerializerId(T)
+  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized, serId))
 
 
 proc remoteCall*(ctx: Context, f: proc, args: seq[string]) {.async.} =
@@ -29,7 +31,7 @@ proc remoteCall*(ctx: Context, f: proc, args: seq[string]) {.async.} =
 
 
 proc driverMain(clientApp: ClientApp) {.async.} =
-  echo "Trying to connect to master"
+  logger.info("Trying to connect to master")
   var master = newAsyncSocket()
   await master.connectRetrying("localhost", Port(12345))
   await master.sendMsg(msgRegisterDriver())

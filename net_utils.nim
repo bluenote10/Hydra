@@ -3,6 +3,7 @@ import nativesockets
 import marshal
 import strutils
 import messages
+from logger import nil
 
 
 proc `$`*(socket: AsyncSocket): string =
@@ -12,13 +13,13 @@ proc `$`*(socket: AsyncSocket): string =
 
 
 proc showConnectionDetails*(socket: AsyncSocket, clientName: string) =
-  echo "Received connection from $1 ($2)" % [$socket, clientName]
+  logger.info("Received connection from $1 ($2)" % [$socket, clientName])
 
 
 proc connectRetrying*(socket: AsyncSocket, url: string, port: Port) {.async.} =
   var connected = false
   while not connected:
-    echo "Trying to connect to $1:$2" % [url, $port]
+    logger.info("Trying to connect to $1:$2" % [url, $port])
     let fut = socket.connect(url, port)
     yield fut
     if not fut.failed:
@@ -30,14 +31,14 @@ proc connectRetrying*(socket: AsyncSocket, url: string, port: Port) {.async.} =
 proc sendMsg*[T](socket: AsyncSocket, x: T) {.async.} =
   var msg = $$x
   var msgSize = msg.len.int
-  echo "sending msgSize = ", msgSize
+  logger.debug("sending msgSize = ", msgSize)
   await socket.send(msgSize.addr, sizeOf(int))
-  echo "sending msg = ", msg
+  logger.debug("sending msg = ", msg)
   await socket.send(msg)
 
 
 proc receiveMsg*(socket: AsyncSocket, T: typedesc): Future[T] {.async.} =
-  echo "Trying to receive message from ", $socket
+  logger.debug("Trying to receive message from ", $socket)
 
   var msgSize: int
 
@@ -48,7 +49,7 @@ proc receiveMsg*(socket: AsyncSocket, T: typedesc): Future[T] {.async.} =
   else:
     let numRead = futNumRead.read()
     if numRead != sizeOf(int):
-      echo "WARNING: expected to read ", sizeOf(int), " bytes, but read: ", numRead
+      logger.warn("Expected to read ", sizeOf(int), " bytes, but read: ", numRead)
       socket.close()
 
     else:
@@ -59,7 +60,7 @@ proc receiveMsg*(socket: AsyncSocket, T: typedesc): Future[T] {.async.} =
       else:
         let rawMsg = futRawMsg.read()
         if rawMsg.len != msgSize:
-          echo "WARNING: expected to read ", msgSize, " bytes, but read: ", rawMsg.len
+          logger.warn("Expected to read ", msgSize, " bytes, but read: ", rawMsg.len)
           socket.close()
         else:
           result = to[T](rawMsg)
