@@ -109,6 +109,11 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
     # used and not in the context of the other template (where `bind`
     # would not work for). Rule of thumb: bind in usage scope
     bind to
+    # TODO: we need much better error handling here which communicates:
+    # "remote key 'x' is of type X but expected Y"
+    # We also should check for out-of-bounds errors (if provided args
+    # vector is smaller than the number of function args) or superficial
+    # args (if the provided args contain more than the function takes).
     let argName = to(args[argIndex], argType)
 
   for i, arg in args.pairs:

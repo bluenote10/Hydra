@@ -38,7 +38,7 @@ macro remote*(procDef: untyped): untyped =
     sProcDef
     bind `sProcIdent`, logger.info
     # The lookup memory addr must be the one of orig, because that's what the user will pass in
-    logger.info("Registering proc ", origName, " as ID ", procId, " [addr: ", cast[int](origIdent), "]")
+    logger.info("Registering proc ", origName, " as ProcID: ", procId, " [addr: ", cast[int](origIdent), "]")
     # The registered proc on the other hand must be the serialized one
     registeredProcs[procId] = sProcIdent
     procIdLookup[cast[pointer](origIdent)] = procId
@@ -59,7 +59,7 @@ proc lookupProc*(f: proc): ProcId =
   ## This is called on client/driver side to convert a real proc
   ## into a proc id. This allows clients to reference their actual
   ## functions for a remote proc call.
-  logger.info "looking up func ", cast[int](f)
+  logger.info("Looking up proc by addr: ", cast[int](f))
   let p = cast[pointer](f)
   if procIdLookup.hasKey(p):
     let id = procIdLookup[p]
@@ -71,7 +71,7 @@ proc lookupProc*(f: proc): ProcId =
 proc callById*(id: ProcId, args: seq[AnyVal]): AnyVal =
   ## This is called on worker side call an (AnyVal -> AnyVal)
   ## proc by its ID.
-  logger.info "looking up id ", id
+  logger.info("Looking up ProcId: ", id)
   let f = registeredProcs[id]
   result = f(args)
 
@@ -149,7 +149,7 @@ macro registerSerializer*(T: typedesc): untyped =
 
   template buildAst(T) =
     bind Serializer, ofType, logger.info
-    logger.info("registering serializer for: ", name(T))
+    logger.info("Registering serializer for: ", name(T), " as SerId: ", regSerId)
     let serializer = Serializer[T](id: regSerId)
     regAnySerProc[regSerId] = storeAny[T](serializer)
     regAnyDeserProc[regSerId] = restoreAny[T](serializer)
@@ -166,11 +166,16 @@ macro registerSerializer*(T: typedesc): untyped =
   # echo result.repr
 
 proc lookupSerializerId*(T: typedesc): SerId =
+  ## Called in client/driver side to convert types into SerId
   var dummy: T
   let typeAddr = getTypeInfo(dummy)
   let serId = regSerTypes[typeAddr]
   result = serId
 
 proc lookupDeserializerProc*(serId: int): AnyDeserProc =
+  ## Called on worker side to deserializer arguments (string -> AnyVal)
   result = regAnyDeserProc[serId]
 
+proc lookupSerializerProc*(serId: int): AnySerProc =
+  ## Called on worker side to serialize results (AnyVal -> string)
+  result = regAnySerProc[serId]

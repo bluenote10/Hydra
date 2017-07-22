@@ -14,20 +14,31 @@ type
   ClientApp* = Context -> void
 
 
-proc pushData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]) {.async.} =
+proc pushData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]) =
   let dataSerialized = store(x)
   let serId = serializer.getId()
-  await ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
+  waitFor ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
 
-proc pushData*[T](ctx: Context, key: string, x: T) {.async.} =
+proc pushData*[T](ctx: Context, key: string, x: T) =
   let dataSerialized = store(x)
   let serId = lookupSerializerId(T)
-  await ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
+  waitFor ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
+
+proc pullData*(ctx: Context, key: string, T: typedesc): T =
+  let serId = lookupSerializerId(T)
+  waitFor ctx.master.sendMsg(msgPullData(key, serId))
+  let msg = waitFor ctx.workers[0].receiveMsg(Message)
+  case msg.kind
+  of MsgKind.PureData:
+    result = msg.pureData.restore(T)
+  else:
+    logger.warn("Received message: ", msg, " but expected PureData.")
 
 
-proc remoteCall*(ctx: Context, f: proc, args: seq[string], resultKey: string) {.async.} =
+proc remoteCall*(ctx: Context, f: proc, args: seq[string], resultKey: string) =
+  ## TODO should we check that the number of args matches?
   let procId = lookupProc(f)
-  await ctx.master.sendMsg(msgRemoteCall(procId, args, resultKey))
+  waitFor ctx.master.sendMsg(msgRemoteCall(procId, args, resultKey))
 
 
 proc driverMain(clientApp: ClientApp) {.async.} =
@@ -50,7 +61,7 @@ proc driverMain(clientApp: ClientApp) {.async.} =
 
   let ctx = Context(
     master: master,
-    workers: newSeq[AsyncSocket](),
+    workers: @[worker],
   )
 
   clientApp(ctx)

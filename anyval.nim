@@ -56,7 +56,7 @@ proc toAnyVal*[T](x: var T): AnyVal =
 
 proc to*(anyval: AnyVal, T: typedesc): T =
   # echo "reconstructing type ", name(T), " of size ", sizeOf(T)
-  assert anyVal.ofType(T)
+  doAssert anyVal.ofType(T), "Expected type " & name(T) & " but got " & $anyval
   copyMem(result.addr, anyval.getAddr(), sizeOf(T))
 
 

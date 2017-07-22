@@ -29,21 +29,29 @@ proc handleMaster(worker: Worker) {.async.} =
     case msg.kind
     of MsgKind.PushData:
       let key = msg.keyPush
-      logger.info("received request to register data: ", key)
-      let serId = msg.serializerId
-      logger.info("trying to lookup deserializer with id: ", serId)
+      logger.info("Received request to register data: ", key)
+      let serId = msg.serializerIdPush
+      logger.info("Trying to lookup deserializer with id: ", serId)
       let deserProc = lookupDeserializerProc(serId)
       let anyval = deserProc(msg.data)
       logger.info(anyval)
       worker.kvStore[key] = anyval
+    of MsgKind.PullData:
+      let key = msg.keyPull
+      logger.info("Received request to register data: ", key)
+      let serId = msg.serializerIdPull
+      logger.info("Trying to lookup deserializer with id: ", serId)
+      let serProc = lookupSerializerProc(serId)
+      let rawData = serProc(worker.kvStore[key])
+      await worker.driver.sendMsg(msgPureData(rawData))
     of MsgKind.RemoteCall:
-      logger.info("received request to call remote proc: ", msg.procId)
+      logger.info("Received request to call remote proc: ", msg.procId)
       var args = newSeq[AnyVal](msg.args.len)
       for i in 0 ..< msg.args.len:
         let key = msg.args[i]
         args[i] = worker.kvStore[key] # TODO handle missing keys...
       let anyResult = callById(msg.procId, args)
-      logger.info()
+      worker.kvStore[msg.resultKey] = anyResult
     else:
       logger.info("Received illegal welcome message: " & $msg)
 

@@ -5,7 +5,7 @@ import worker
 import driver
 
 
-proc launcher*(clientApp: ClientApp) =
+proc launch*(clientApp: ClientApp) =
   let args = commandLineParams()
 
   if args.len != 1:

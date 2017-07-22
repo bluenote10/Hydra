@@ -30,6 +30,11 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
       # but rather make it two steps: The client request a push of
       # a key, and we communicate back a worker ID to which the
       # key+value should be send.
+    of MsgKind.PullData:
+      logger.info("received request to pull data: ", msg.keyPull)
+      # => forward message to worker -- TODO: proper scheduling
+      if master.workers.len > 0:
+        await master.workers[0].sendMsg(msg)
     of MsgKind.RemoteCall:
       logger.info("received request to call remote proc: ", msg.procId)
       # => forward message to worker -- TODO: proper scheduling

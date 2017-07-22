@@ -1,4 +1,3 @@
-import asyncdispatch
 import math
 
 import runner
@@ -15,9 +14,16 @@ proc remoteHelloWorld(i: int, data: seq[int]): float {.remote.} =
   echo data
   result = sum(data).float
 
-launcher do (ctx: Context):
-  waitFor ctx.pushData("i", 42)
-  waitFor ctx.pushData("x", 0.5)
-  waitFor ctx.pushData("data", @[1, 2, 3])
 
-  waitFor ctx.remoteCall(remoteHelloWorld, @["x", "i", "data"], "result")
+proc remoteApp(ctx: Context) =
+  ctx.pushData("i", 42)
+  ctx.pushData("x", 0.5)
+  ctx.pushData("data", @[1, 2, 3])
+
+  ctx.remoteCall(remoteHelloWorld, @["i", "data"], "result")
+
+  let result = ctx.pullData("result", float)
+  echo result
+
+
+launch(remoteApp)
