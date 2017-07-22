@@ -12,7 +12,7 @@ type
 var level: Level = Debug
 
 
-macro appendVarargToCall(c: untyped, prefix: string, e: untyped): untyped =
+macro appendVarargToCall(c: untyped, prefix: string, e: untyped): untyped {.used.} =
   result = c
   result.add(prefix)
   for a in e.children:

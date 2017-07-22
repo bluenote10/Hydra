@@ -23,11 +23,18 @@ method `typeName`*(c: Column): string {.base.} =
 method `typeName`*[T](c: TypedCol[T]): string =
   result = name(T)
 
+method `len`*(c: Column): int {.base.} =
+  raise newException(AssertionError, "`len` of base method should not be called.")
+
+method `len`*[T](c: TypedCol[T]): int =
+  result = c.arr.len
+
+
 proc newCol*[T](s: seq[T]): Column =
   return TypedCol[T](arr: s)
 
 proc newCol*[T](length: int): Column =
-  return TypedCol[T](newSeq[T](length))
+  return TypedCol[T](arr: newSeq[T](length))
 
 
 template assertType(c: Column, T: typedesc): TypedCol[T] =
@@ -44,9 +51,30 @@ template assertType(c: Column, T: typedesc): TypedCol[T] =
   cast[TypedCol[T]](c)
 
 template toTyped(newCol: untyped, c: Column, T: typedesc): untyped =
+  ## Alternative to assertType.
+  ## Pro: - The user doesn't have to decide between let or var.
+  ## Con: - Doesn't emphasize that there is an assertion.
   if not (c of TypedCol[T]):
     raise newException(ValueError, "Expected column of type " & name(T))
   let newCol = cast[TypedCol[T]](c)
+
+
+proc sum*(c: Column): float =
+  if c of TypedCol[int]:
+    let cTyped = c.assertType(int)
+    var sum = 0.0
+    for x in cTyped.arr:
+      sum += x.float
+    return sum
+  elif c of TypedCol[float32]:
+    let cTyped = c.assertType(float32)
+    var sum = 0.0
+    for x in cTyped.arr:
+      sum += x.float
+    return sum
+
+proc mean*(c: Column): float =
+  c.sum / c.len.float
 
 
 when isMainModule:
@@ -75,13 +103,13 @@ when isMainModule:
   operateOnCol(c1)
   operateOnCol(c2)
 
-  block:
+  block:  # block allows to re-use variable names
     let c1 = c1.assertType(string)
     let c2 = c2.assertType(int)
     echo c1.arr
     echo c2.arr
 
-  block:
+  block:  # block allows to re-use variable names
     toTyped(c1, c1, string)
     toTyped(c2, c2, int)
     echo c1.arr
