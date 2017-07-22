@@ -21,8 +21,8 @@ proc handleDriver(master: Master, driver: AsyncSocket) {.async.} =
     if driver.isClosed(): break
 
     case msg.kind
-    of MsgKind.RegisterData:
-      logger.info("received request to register data: ", msg.key)
+    of MsgKind.PushData:
+      logger.info("received request to register data: ", msg.keyPush)
       # => forward message to worker -- TODO: proper scheduling
       if master.workers.len > 0:
         await master.workers[0].sendMsg(msg)

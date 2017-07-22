@@ -14,20 +14,20 @@ type
   ClientApp* = Context -> void
 
 
-proc registerData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]) {.async.} =
+proc pushData*[T](ctx: Context, key: string, x: T, serializer: Serializer[T]) {.async.} =
   let dataSerialized = store(x)
   let serId = serializer.getId()
-  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized, serId))
+  await ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
 
-proc registerData*[T](ctx: Context, key: string, x: T) {.async.} =
+proc pushData*[T](ctx: Context, key: string, x: T) {.async.} =
   let dataSerialized = store(x)
   let serId = lookupSerializerId(T)
-  await ctx.master.sendMsg(msgRegisterData(key, dataSerialized, serId))
+  await ctx.master.sendMsg(msgPushData(key, dataSerialized, serId))
 
 
-proc remoteCall*(ctx: Context, f: proc, args: seq[string]) {.async.} =
+proc remoteCall*(ctx: Context, f: proc, args: seq[string], resultKey: string) {.async.} =
   let procId = lookupProc(f)
-  await ctx.master.sendMsg(msgRemoteCall(procId, args))
+  await ctx.master.sendMsg(msgRemoteCall(procId, args, resultKey))
 
 
 proc driverMain(clientApp: ClientApp) {.async.} =

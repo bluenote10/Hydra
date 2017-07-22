@@ -7,17 +7,22 @@ type
     RegisterWorker,
     RegisterDriver,
     RemoteCall,
-    RegisterData,
+    PushData,
+    PullData,
 
   Message* = object
     case kind*: MsgKind
     of MsgKind.RemoteCall:
       procId*: int
       args*: seq[string]
-    of MsgKind.RegisterData:
-      key*: string
+      resultKey*: string
+    of MsgKind.PushData:
+      keyPush*: string
       data*: string
       serializerId*: int
+    of MsgKind.PullData:
+      keyPull*: string
+      #serializerId*: int
     else:
       discard
 
@@ -31,9 +36,12 @@ proc msgRegisterWorker*(): Message =
 proc msgRegisterDriver*(): Message =
   Message(kind: MsgKind.RegisterDriver)
 
-proc msgRegisterData*(key: string, data: string, serializerId: int): Message =
-  Message(kind: MsgKind.RegisterData, key: key, data: data, serializerId: serializerId)
+proc msgPushData*(key: string, data: string, serializerId: int): Message =
+  Message(kind: MsgKind.PushData, keyPush: key, data: data, serializerId: serializerId)
 
-proc msgRemoteCall*(procId: int, args: seq[string]): Message =
-  Message(kind: MsgKind.RemoteCall, procId: procId, args: args)
+proc msgPullData*(key: string, data: string, serializerId: int): Message =
+  Message(kind: MsgKind.PullData, keyPull: key)
+
+proc msgRemoteCall*(procId: int, args: seq[string], resultKey: string): Message =
+  Message(kind: MsgKind.RemoteCall, procId: procId, args: args, resultKey: resultKey)
 

@@ -20,6 +20,7 @@ registeredProcs = initTable[ProcId, SerializedProc]()
 procIdLookup = initTable[pointer, int]()
 var procId = ProcId(0)
 
+
 macro remote*(procDef: untyped): untyped =
   expectKind procDef, nnkProcDef
 
@@ -54,22 +55,10 @@ macro remote*(procDef: untyped): untyped =
   # echo result.treeRepr
 
 
-proc callById*(id: int, args: seq[AnyVal]): AnyVal =
-  logger.info "looking up id ", id
-  let f = registeredProcs[id]
-  result = f(args)
-
-proc genericCall*(f: proc, x: string): string =
-  logger.info "looking up func ", cast[int](f)
-  let p = cast[pointer](f)
-  if procIdLookup.hasKey(p):
-    let id = procIdLookup[p]
-    result = callById(id, x)
-  else:
-    raise newException(ValueError, "Can't find passed in proc in remote proc list.")
-
-
-proc lookupProc*(f: proc): int =
+proc lookupProc*(f: proc): ProcId =
+  ## This is called on client/driver side to convert a real proc
+  ## into a proc id. This allows clients to reference their actual
+  ## functions for a remote proc call.
   logger.info "looking up func ", cast[int](f)
   let p = cast[pointer](f)
   if procIdLookup.hasKey(p):
@@ -77,6 +66,14 @@ proc lookupProc*(f: proc): int =
     return id
   else:
     raise newException(ValueError, "Can't find passed in proc in remote proc list.")
+
+
+proc callById*(id: ProcId, args: seq[AnyVal]): AnyVal =
+  ## This is called on worker side call an (AnyVal -> AnyVal)
+  ## proc by its ID.
+  logger.info "looking up id ", id
+  let f = registeredProcs[id]
+  result = f(args)
 
 
 when false:

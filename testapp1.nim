@@ -1,4 +1,5 @@
 import asyncdispatch
+import math
 
 import runner
 import driver
@@ -8,15 +9,15 @@ registerSerializer(float)
 registerSerializer(int)
 registerSerializer(seq[int])
 
-proc remoteHelloWorld(x: float, i: int, data: seq[int]) {.remote.} =
+proc remoteHelloWorld(i: int, data: seq[int]): float {.remote.} =
   echo "I'm running on a worker"
-  echo x
   echo i
   echo data
+  result = sum(data).float
 
 launcher do (ctx: Context):
-  waitFor ctx.registerData("i", 42)
-  waitFor ctx.registerData("x", 0.5)
-  waitFor ctx.registerData("data", @[1, 2, 3])
+  waitFor ctx.pushData("i", 42)
+  waitFor ctx.pushData("x", 0.5)
+  waitFor ctx.pushData("data", @[1, 2, 3])
 
-  waitFor ctx.remoteCall(remoteHelloWorld, @["x", "i", "data"])
+  waitFor ctx.remoteCall(remoteHelloWorld, @["x", "i", "data"], "result")

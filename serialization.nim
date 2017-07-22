@@ -123,10 +123,8 @@ proc buildSerializedProc*(n: NimNode): NimNode {.compileTime.} =
     bind AnyVal, toAnyVal, procName
     proc procName(args: varargs[AnyVal]): AnyVal =
       argStatements
-      let origRes = origProcCall
-      var outStream = newStringStream()
-      outStream.serialize(origRes)
-      result = outStream.data
+      var origResult = origProcCall
+      result = toAnyVal(origResult)
 
   template buildProcVoid(procName, argStatements, origProc, origProcCall) {.dirty.} =
     bind AnyVal, toAnyVal, procName

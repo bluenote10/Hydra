@@ -27,21 +27,23 @@ proc handleMaster(worker: Worker) {.async.} =
     if master.isClosed(): break
 
     case msg.kind
-    of MsgKind.RegisterData:
-      logger.info("received request to register data: ", msg.key)
+    of MsgKind.PushData:
+      let key = msg.keyPush
+      logger.info("received request to register data: ", key)
       let serId = msg.serializerId
       logger.info("trying to lookup deserializer with id: ", serId)
       let deserProc = lookupDeserializerProc(serId)
       let anyval = deserProc(msg.data)
       logger.info(anyval)
-      worker.kvStore[msg.key] = anyval
+      worker.kvStore[key] = anyval
     of MsgKind.RemoteCall:
       logger.info("received request to call remote proc: ", msg.procId)
       var args = newSeq[AnyVal](msg.args.len)
       for i in 0 ..< msg.args.len:
         let key = msg.args[i]
         args[i] = worker.kvStore[key] # TODO handle missing keys...
-      logger.info(callById(msg.procId, args))
+      let anyResult = callById(msg.procId, args)
+      logger.info()
     else:
       logger.info("Received illegal welcome message: " & $msg)
 
